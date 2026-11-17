@@ -11,12 +11,14 @@ type Config struct {
 	Port         string
 	UpstreamURL  string
 	ProxyTimeout time.Duration
+	APIKey       string
 }
 
 func LoadConfig() (Config, error) {
 	portText := os.Getenv("PORT")
 	upstreamURL := os.Getenv("UPSTREAM_URL")
 	proxyTimeoutText := os.Getenv("PROXY_TIMEOUT")
+	apiKey := os.Getenv("API_KEY")
 
 	if portText == "" {
 		portText = "8080"
@@ -26,6 +28,9 @@ func LoadConfig() (Config, error) {
 	}
 	if proxyTimeoutText == "" {
 		proxyTimeoutText = "2s"
+	}
+	if apiKey == "" {
+		return Config{}, fmt.Errorf("API_KEY must not be empty")
 	}
 
 	portNumber, err := strconv.Atoi(portText)
@@ -48,5 +53,6 @@ func LoadConfig() (Config, error) {
 		Port:         strconv.Itoa(portNumber),
 		UpstreamURL:  upstreamURL,
 		ProxyTimeout: proxyTimeout,
+		APIKey:       apiKey,
 	}, nil
 }

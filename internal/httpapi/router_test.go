@@ -32,7 +32,7 @@ func TestRouterProxiesWithoutProxyPrefix(t *testing.T) {
 		_, _ = w.Write([]byte("response from upstream"))
 	})
 
-	router := NewRouter(upstream, 2*time.Second)
+	router := NewRouter(upstream, 2*time.Second, "test-key")
 	req := httptest.NewRequest(http.MethodGet, "/proxy/hello", nil)
 	res := httptest.NewRecorder()
 
@@ -51,6 +51,60 @@ func TestRouterProxiesWithoutProxyPrefix(t *testing.T) {
 	}
 }
 
+func TestAdminRouteRejectsMissingAPIKey(t *testing.T) {
+	router := NewRouter(http.NotFoundHandler(), time.Second, "test-key")
+	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+	res := httptest.NewRecorder()
+
+	router.ServeHTTP(res, req)
+
+	if res.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d", res.Code)
+	}
+}
+
+func TestAdminRouteRejectsInvalidAPIKey(t *testing.T) {
+	router := NewRouter(http.NotFoundHandler(), time.Second, "test-key")
+	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+	req.Header.Set(APIKeyHeader, "wrong-key")
+	res := httptest.NewRecorder()
+
+	router.ServeHTTP(res, req)
+
+	if res.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d", res.Code)
+	}
+}
+
+func TestAdminRouteAcceptsValidAPIKey(t *testing.T) {
+	router := NewRouter(http.NotFoundHandler(), time.Second, "test-key")
+	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+	req.Header.Set(APIKeyHeader, "test-key")
+	res := httptest.NewRecorder()
+
+	router.ServeHTTP(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", res.Code)
+	}
+
+	if res.Body.String() != "admin area\n" {
+		t.Fatalf("unexpected response body %q", res.Body.String())
+	}
+}
+
+func TestHealthRouteRemainsPublic(t *testing.T) {
+	router := NewRouter(http.NotFoundHandler(), time.Second, "test-key")
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	res := httptest.NewRecorder()
+
+	router.ServeHTTP(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", res.Code)
+	}
+}
+
 func TestRouterReturnsBadGatewayWhenUpstreamUnavailable(t *testing.T) {
 	target, err := url.Parse("http://127.0.0.1:1")
 	if err != nil {
@@ -62,7 +116,7 @@ func TestRouterReturnsBadGatewayWhenUpstreamUnavailable(t *testing.T) {
 		http.Error(w, "upstream unavailable", http.StatusBadGateway)
 	}
 
-	router := NewRouter(proxy, 2*time.Second)
+	router := NewRouter(proxy, 2*time.Second, "test-key")
 	req := httptest.NewRequest(http.MethodGet, "/proxy/hello", nil)
 	res := httptest.NewRecorder()
 

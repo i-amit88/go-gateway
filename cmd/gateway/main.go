@@ -18,6 +18,7 @@ import (
 )
 
 const maxRequestBodySize = 1 << 20
+
 func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println(".env file not found; using system environment")
@@ -36,7 +37,7 @@ func main() {
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	proxy.ErrorHandler = handleProxyError
 
-	router := httpapi.NewRouter(proxy, cfg.ProxyTimeout)
+	router := httpapi.NewRouter(proxy, cfg.ProxyTimeout, cfg.APIKey)
 	router = httpapi.WithBodyLimit(maxRequestBodySize, router)
 	router = httpapi.WithRecovery(router)
 	router = httpapi.WithLogging(router)
