@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -34,15 +36,31 @@ func main() {
 		log.Fatal(err)
 	}
 
+	httpClient := &http.Client{
+		Timeout: 1 * time.Second,
+	}
+
+	readyCheck := func(ctx context.Context) error {
+		return checkUpstream(
+			ctx,
+			httpClient,
+			cfg.UpstreamURL,
+		)
+	}
+
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	proxy.ErrorHandler = handleProxyError
 
-	router := httpapi.NewRouter(proxy, cfg.ProxyTimeout, cfg.APIKey)
+	router := httpapi.NewRouter(
+		proxy,
+		cfg.ProxyTimeout,
+		cfg.APIKey,
+		readyCheck,
+	)
 	router = httpapi.WithBodyLimit(maxRequestBodySize, router)
 	router = httpapi.WithRecovery(router)
 	router = httpapi.WithLogging(router)
 	router = httpapi.WithRequestID(router)
-
 	server := &http.Server{
 		Addr:    ":" + cfg.Port,
 		Handler: router,
@@ -99,4 +117,35 @@ func handleProxyError(w http.ResponseWriter, r *http.Request, err error) {
 	}
 
 	http.Error(w, message, status)
+}
+
+func checkUpstream(
+	ctx context.Context,
+	client *http.Client,
+	upstreamURL string,
+) error {
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		strings.TrimRight(upstreamURL, "/")+"/health",
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+
+	response, err := client.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf(
+			"upstream returned status %d",
+			response.StatusCode,
+		)
+	}
+
+	return nil
 }

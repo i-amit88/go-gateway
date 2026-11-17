@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
@@ -9,11 +10,46 @@ import (
 	"time"
 )
 
+func testReadyCheck(ctx context.Context) error {
+	return nil
+}
+
 func TestHealthHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	res := httptest.NewRecorder()
 
 	healthHandler(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", res.Code)
+	}
+
+	if res.Body.String() != "OK\n" {
+		t.Fatalf("expected body %q, got %q", "OK\n", res.Body.String())
+	}
+}
+
+func TestLiveHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/live", nil)
+	res := httptest.NewRecorder()
+
+	liveHandler(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", res.Code)
+	}
+
+	if res.Body.String() != "OK\n" {
+		t.Fatalf("expected body %q, got %q", "OK\n", res.Body.String())
+	}
+}
+
+func TestLiveRouteIsPublic(t *testing.T) {
+	router := NewRouter(http.NotFoundHandler(), time.Second, "test-key", testReadyCheck)
+	req := httptest.NewRequest(http.MethodGet, "/live", nil)
+	res := httptest.NewRecorder()
+
+	router.ServeHTTP(res, req)
 
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", res.Code)
@@ -32,7 +68,7 @@ func TestRouterProxiesWithoutProxyPrefix(t *testing.T) {
 		_, _ = w.Write([]byte("response from upstream"))
 	})
 
-	router := NewRouter(upstream, 2*time.Second, "test-key")
+	router := NewRouter(upstream, 2*time.Second, "test-key", testReadyCheck)
 	req := httptest.NewRequest(http.MethodGet, "/proxy/hello", nil)
 	res := httptest.NewRecorder()
 
@@ -52,7 +88,7 @@ func TestRouterProxiesWithoutProxyPrefix(t *testing.T) {
 }
 
 func TestAdminRouteRejectsMissingAPIKey(t *testing.T) {
-	router := NewRouter(http.NotFoundHandler(), time.Second, "test-key")
+	router := NewRouter(http.NotFoundHandler(), time.Second, "test-key", testReadyCheck)
 	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
 	res := httptest.NewRecorder()
 
@@ -64,7 +100,7 @@ func TestAdminRouteRejectsMissingAPIKey(t *testing.T) {
 }
 
 func TestAdminRouteRejectsInvalidAPIKey(t *testing.T) {
-	router := NewRouter(http.NotFoundHandler(), time.Second, "test-key")
+	router := NewRouter(http.NotFoundHandler(), time.Second, "test-key", testReadyCheck)
 	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
 	req.Header.Set(APIKeyHeader, "wrong-key")
 	res := httptest.NewRecorder()
@@ -77,7 +113,7 @@ func TestAdminRouteRejectsInvalidAPIKey(t *testing.T) {
 }
 
 func TestAdminRouteAcceptsValidAPIKey(t *testing.T) {
-	router := NewRouter(http.NotFoundHandler(), time.Second, "test-key")
+	router := NewRouter(http.NotFoundHandler(), time.Second, "test-key", testReadyCheck)
 	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
 	req.Header.Set(APIKeyHeader, "test-key")
 	res := httptest.NewRecorder()
@@ -94,7 +130,7 @@ func TestAdminRouteAcceptsValidAPIKey(t *testing.T) {
 }
 
 func TestHealthRouteRemainsPublic(t *testing.T) {
-	router := NewRouter(http.NotFoundHandler(), time.Second, "test-key")
+	router := NewRouter(http.NotFoundHandler(), time.Second, "test-key", testReadyCheck)
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	res := httptest.NewRecorder()
 
@@ -116,7 +152,7 @@ func TestRouterReturnsBadGatewayWhenUpstreamUnavailable(t *testing.T) {
 		http.Error(w, "upstream unavailable", http.StatusBadGateway)
 	}
 
-	router := NewRouter(proxy, 2*time.Second, "test-key")
+	router := NewRouter(proxy, 2*time.Second, "test-key", testReadyCheck)
 	req := httptest.NewRequest(http.MethodGet, "/proxy/hello", nil)
 	res := httptest.NewRecorder()
 

@@ -33,6 +33,9 @@ func slowHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("slow request cancelled: %v", r.Context().Err())
 	}
 }
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintln(w, "OK")
+}
 
 func main() {
 	mux := http.NewServeMux()
@@ -40,6 +43,7 @@ func main() {
 	mux.HandleFunc("/hello", helloHandler)
 	mux.HandleFunc("/echo", echoHandler)
 	mux.HandleFunc("/slow", slowHandler)
+	http.HandleFunc("/health", healthHandler)
 
 	log.Println("upstream starting on :9090")
 	if err := http.ListenAndServe(":9090", mux); err != nil {
