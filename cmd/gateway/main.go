@@ -16,6 +16,7 @@ import (
 
 	"example.com/go-gateway/config"
 	"example.com/go-gateway/internal/httpapi"
+	"example.com/go-gateway/internal/session"
 	"github.com/joho/godotenv"
 )
 
@@ -50,12 +51,13 @@ func main() {
 
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	proxy.ErrorHandler = handleProxyError
-
+	sessionManager := session.NewMemorySessionManager()
 	router := httpapi.NewRouter(
 		proxy,
 		cfg.ProxyTimeout,
 		cfg.APIKey,
 		readyCheck,
+		sessionManager,
 	)
 	router = httpapi.WithBodyLimit(maxRequestBodySize, router)
 	router = httpapi.WithRecovery(router)

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"example.com/go-gateway/internal/session"
 )
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
@@ -24,6 +26,7 @@ func NewRouter(
 	proxyTimeout time.Duration,
 	apiKey string,
 	readyCheck func(context.Context) error,
+	sessionManager session.SessionManager,
 ) http.Handler {
 	mux := http.NewServeMux()
 	protectedAdmin := WithAPIKey(
@@ -31,8 +34,8 @@ func NewRouter(
 		http.HandlerFunc(adminHandler),
 	)
 	mux.HandleFunc("/health", healthHandler)
-
 	proxyHandler := http.StripPrefix("/proxy", proxy)
+	sessions := session.NewSessionHandler(sessionManager)
 	timeoutProxy := withTimeout(
 		proxyTimeout,
 		proxyHandler,
@@ -44,6 +47,9 @@ func NewRouter(
 		"/ready",
 		readyHandler(readyCheck),
 	)
+	mux.HandleFunc("POST /sessions", sessions.Create)
+	mux.HandleFunc("GET /sessions/{id}", sessions.Get)
+	mux.HandleFunc("DELETE /sessions/{id}", sessions.Delete)
 
 	return mux
 }
